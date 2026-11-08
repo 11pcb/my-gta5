@@ -1,0 +1,305 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Play GTA 5 in your browser. Choose your graphics settings and start playing.">
+<title>GTA 5 | Play in Browser</title>
+
+<style>
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: #101510;
+    color: #f2f5ef;
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+}
+
+header {
+    padding: 24px 7%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #303a30;
+}
+
+.logo {
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #8cce75;
+}
+
+header a {
+    color: #c3cfc0;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+main {
+    max-width: 1050px;
+    margin: auto;
+    padding: 65px 25px;
+}
+
+.hero {
+    text-align: center;
+    margin-bottom: 45px;
+}
+
+.tag {
+    color: #8cce75;
+    letter-spacing: 3px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+h1 {
+    font-size: clamp(42px, 8vw, 75px);
+    margin: 18px 0;
+    letter-spacing: -3px;
+}
+
+.hero p {
+    color: #aab5a7;
+    line-height: 1.7;
+}
+
+.panel {
+    max-width: 650px;
+    margin: auto;
+    padding: 30px;
+    background: #1b241b;
+    border: 1px solid #354335;
+    border-radius: 12px;
+}
+
+.panel h2 {
+    font-size: 24px;
+    margin-bottom: 10px;
+}
+
+.description {
+    color: #aab5a7;
+    font-size: 14px;
+    margin-bottom: 25px;
+    line-height: 1.6;
+}
+
+.settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+}
+
+label {
+    display: block;
+    margin-bottom: 9px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+select {
+    width: 100%;
+    padding: 13px;
+    background: #101810;
+    color: white;
+    border: 1px solid #455345;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+}
+
+select:focus {
+    border-color: #8cce75;
+}
+
+.play-button {
+    width: 100%;
+    margin-top: 25px;
+    padding: 16px;
+    background: #8cce75;
+    color: #101810;
+    border: none;
+    border-radius: 6px;
+    font-size: 17px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.play-button:hover {
+    background: #a5e58d;
+}
+
+#status {
+    color: #aab5a7;
+    text-align: center;
+    font-size: 13px;
+    margin-top: 15px;
+    min-height: 18px;
+}
+
+.notice {
+    max-width: 650px;
+    margin: 25px auto;
+    color: #899689;
+    font-size: 13px;
+    line-height: 1.7;
+    text-align: center;
+}
+
+footer {
+    text-align: center;
+    padding: 25px;
+    color: #758175;
+    font-size: 12px;
+    border-top: 1px solid #303a30;
+}
+
+@media(max-width:600px) {
+    header {
+        padding: 20px;
+    }
+
+    main {
+        padding: 45px 18px;
+    }
+
+    .settings {
+        grid-template-columns: 1fr;
+    }
+
+    .panel {
+        padding: 22px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <div class="logo">PLAY GTA 5</div>
+    <a href="https://github.com/alihammoud21/playgta5">
+        Project Information
+    </a>
+</header>
+
+<main>
+
+    <section class="hero">
+        <div class="tag">BROWSER GAMING</div>
+
+        <h1>GRAND THEFT AUTO V</h1>
+
+        <p>
+            Choose your preferred graphics settings
+            and start your game.
+        </p>
+    </section>
+
+    <section class="panel">
+
+        <h2>Game Settings</h2>
+
+        <p class="description">
+            Select your preferred performance settings
+            before starting the game.
+        </p>
+
+        <div class="settings">
+
+            <div>
+                <label for="graphics">
+                    Graphics Quality
+                </label>
+
+                <select id="graphics">
+                    <option value="low">Low</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="high">High</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="resolution">
+                    Resolution
+                </label>
+
+                <select id="resolution">
+                    <option value="1280x720">1280 × 720</option>
+                    <option value="1600x900">1600 × 900</option>
+                    <option value="1920x1080">1920 × 1080</option>
+                </select>
+            </div>
+
+        </div>
+
+        <button class="play-button" id="playButton">
+            PLAY GTA 5
+        </button>
+
+        <div id="status" role="status" aria-live="polite"></div>
+
+    </section>
+
+    <p class="notice">
+        Performance depends on your device, GPU,
+        browser and available memory.
+        The browser version uses your own device
+        for game rendering.
+    </p>
+
+</main>
+
+<footer>
+    This is a compiled client snapshot.
+    Not affiliated with Rockstar Games or Take-Two.
+</footer>
+
+<script>
+
+// Replace this with your own game URL
+const GAME_URL = "https://gta5-87g.pages.dev/";
+
+document.getElementById("playButton").addEventListener("click", function() {
+
+    const graphics = document.getElementById("graphics").value;
+    const resolution = document.getElementById("resolution").value;
+
+    const params = new URLSearchParams();
+
+    if (graphics === "low") {
+        params.set("low", "1");
+        params.set("fps", "30");
+        params.set("res", "1280x720");
+
+    } else if (graphics === "medium") {
+        params.set("fps", "30");
+        params.set("res", resolution);
+
+    } else if (graphics === "high") {
+        params.set("fps", "60");
+        params.set("res", resolution);
+    }
+
+    const game = new URL(GAME_URL);
+    game.search = params.toString();
+
+    document.getElementById("status").textContent =
+        "Starting GTA 5...";
+
+    window.location.href = game.toString();
+
+});
+
+</script>
+
+</body>
+</html>
