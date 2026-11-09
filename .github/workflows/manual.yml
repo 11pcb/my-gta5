@@ -1,38 +1,65 @@
 
-name: Manual GTA5 Workflow
+name: GTA5 Manual Download
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  test:
+  download:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 360
 
     steps:
+      # 1. Get repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Check available storage
+      # 3. Check initial disk space
+      - name: Check initial disk
         run: |
+          echo "Initial disk space:"
           df -h /
 
-      - name: Check project files
+      # 4. Clean unused preinstalled tools
+      - name: Clean runner disk
         run: |
-          ls -lh
-          python --version
+          sudo apt-get clean
 
-      - name: Check Python scripts
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/share/boost
+
+          echo "Disk after cleanup:"
+          df -h /
+
+      # 5. Download and extract game
+      - name: Download GTA5 files
         run: |
-          python -m py_compile download_game.py
-          python -m py_compile build_web.py
-          python -m py_compile build_pages.py
-          python -m py_compile serve_local.py
+          python -u download_game.py
 
-      - name: Finish
-        run: echo "GTA5 project checks completed!"
+      # 6. Verify downloaded files
+      - name: Check downloaded files
+        if: always()
+        run: |
+          echo "Final disk:"
+          df -h /
+
+          echo "Mirror size:"
+          du -sh mirror/ 2>/dev/null || true
+
+          echo "Installed parts:"
+          ls -lh .installed-parts/ 2>/dev/null || true
+
+          echo "Download folder:"
+          du -sh .downloads/ 2>/dev/null || true
