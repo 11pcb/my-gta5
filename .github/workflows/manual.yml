@@ -1,5 +1,5 @@
 
-name: GTA5 Manual Download and Build
+name: GTA5 Manual Download, Build and Deploy
 
 on:
   workflow_dispatch:
@@ -67,22 +67,31 @@ jobs:
 
       # 8. Build report
       - name: Check Pages output
-        if: always()
         run: |
           echo "Build output size:"
           du -sh pages-output/ 2>/dev/null || true
 
           echo "Total output files:"
-          find pages-output/ -type f 2>/dev/null | wc -l
+          find pages-output/ -type f | wc -l
 
           echo "Output sample:"
-          find pages-output/ -maxdepth 2 -type f 2>/dev/null | head -30
+          find pages-output/ -maxdepth 2 -type f | head -30
 
-          echo "Final disk:"
+          echo "Available disk:"
           df -h /
 
-      # 9. Report installed files
-      - name: Check installed parts
+      # 9. Deploy to Cloudflare Pages
+      - name: Deploy to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler@latest pages deploy pages-output \
+            --project-name=my-gta5 \
+            --branch=main
+
+      # 10. Final report
+      - name: Check installed files
         if: always()
         run: |
           echo "Installed receipts:"
@@ -90,3 +99,6 @@ jobs:
 
           echo "Download folder:"
           du -sh .downloads/ 2>/dev/null || true
+
+          echo "Final disk:"
+          df -h /
