@@ -1,10 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Play GTA 5 in your browser. Choose your graphics settings and start playing.">
+
 <title>GTA 5 | Play in Browser</title>
 
 <style>
@@ -92,17 +92,40 @@ h1 {
     line-height: 1.6;
 }
 
-.settings {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 18px;
-}
-
-label {
+.label-title {
     display: block;
-    margin-bottom: 9px;
+    margin-bottom: 12px;
     font-size: 14px;
     font-weight: bold;
+}
+
+.graphics-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+.graphics-button {
+    padding: 15px 8px;
+    background: #101810;
+    color: #c3cfc0;
+    border: 1px solid #455345;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.graphics-button:hover {
+    border-color: #8cce75;
+}
+
+.graphics-button.active {
+    background: #8cce75;
+    color: #101810;
+    border-color: #8cce75;
 }
 
 select {
@@ -114,6 +137,7 @@ select {
     border-radius: 6px;
     font-size: 14px;
     outline: none;
+    cursor: pointer;
 }
 
 select:focus {
@@ -131,6 +155,7 @@ select:focus {
     font-size: 17px;
     font-weight: bold;
     cursor: pointer;
+    transition: 0.2s;
 }
 
 .play-button:hover {
@@ -171,12 +196,17 @@ footer {
         padding: 45px 18px;
     }
 
-    .settings {
-        grid-template-columns: 1fr;
-    }
-
     .panel {
         padding: 22px;
+    }
+
+    .graphics-options {
+        gap: 7px;
+    }
+
+    .graphics-button {
+        padding: 13px 5px;
+        font-size: 12px;
     }
 }
 </style>
@@ -186,7 +216,10 @@ footer {
 
 <header>
     <div class="logo">PLAY GTA 5</div>
-    <a href="https://github.com/alihammoud21/playgta5">
+
+    <a href="https://github.com/alihammoud21/playgta5"
+       target="_blank"
+       rel="noopener noreferrer">
         Project Information
     </a>
 </header>
@@ -209,39 +242,48 @@ footer {
         <h2>Game Settings</h2>
 
         <p class="description">
-            Select your preferred performance settings
-            before starting the game.
+            Select your preferred graphics quality
+            and resolution before starting your game.
         </p>
 
-        <div class="settings">
+        <label class="label-title">Graphics Quality</label>
 
-            <div>
-                <label for="graphics">
-                    Graphics Quality
-                </label>
+        <div class="graphics-options">
 
-                <select id="graphics">
-                    <option value="low">Low</option>
-                    <option value="medium" selected>Medium</option>
-                    <option value="high">High</option>
-                </select>
-            </div>
+            <button type="button"
+                    class="graphics-button"
+                    data-quality="low">
+                LOW
+            </button>
 
-            <div>
-                <label for="resolution">
-                    Resolution
-                </label>
+            <button type="button"
+                    class="graphics-button active"
+                    data-quality="medium">
+                MEDIUM
+            </button>
 
-                <select id="resolution">
-                    <option value="1280x720">1280 × 720</option>
-                    <option value="1600x900">1600 × 900</option>
-                    <option value="1920x1080">1920 × 1080</option>
-                </select>
-            </div>
+            <button type="button"
+                    class="graphics-button"
+                    data-quality="high">
+                HIGH
+            </button>
 
         </div>
 
-        <button class="play-button" id="playButton">
+        <label class="label-title" for="resolution">
+            Resolution
+        </label>
+
+        <select id="resolution">
+            <option value="640x360">640 × 360</option>
+            <option value="800x450">800 × 450</option>
+            <option value="960x540">960 × 540</option>
+            <option value="1280x720">1280 × 720</option>
+            <option value="1600x900">1600 × 900</option>
+            <option value="1920x1080">1920 × 1080</option>
+        </select>
+
+        <button type="button" class="play-button" id="playButton">
             PLAY GTA 5
         </button>
 
@@ -265,36 +307,120 @@ footer {
 
 <script>
 
-// Replace this with your own game URL
-const GAME_URL = "https://94b59038.my-gta5-game-br1.pages.dev/";
+const GAME_URL =
+    "https://94b59038.my-gta5-game-br1.pages.dev/";
 
-document.getElementById("playButton").addEventListener("click", function() {
+let selectedGraphics = "medium";
 
-    const graphics = document.getElementById("graphics").value;
-    const resolution = document.getElementById("resolution").value;
+const graphicsButtons =
+    document.querySelectorAll(".graphics-button");
+
+const resolution =
+    document.getElementById("resolution");
+
+const playButton =
+    document.getElementById("playButton");
+
+const status =
+    document.getElementById("status");
+
+const recommendedResolutions = {
+    low: "640x360",
+    medium: "1280x720",
+    high: "1920x1080"
+};
+
+const presets = {
+
+    low: {
+        low: "1",
+        fps: "30",
+        shadows: "0"
+    },
+
+    medium: {
+        low: "1",
+        fps: "60",
+        shadows: "0"
+    },
+
+    high: {
+        low: "0",
+        fps: "60",
+        shadows: "1"
+    }
+
+};
+
+// Update recommended resolution
+
+function updateRecommendation() {
+
+    const recommended =
+        recommendedResolutions[selectedGraphics];
+
+    [...resolution.options].forEach(option => {
+
+        const label =
+            option.value.replace("x", " × ");
+
+        option.textContent =
+            option.value === recommended
+                ? label + " (Recommended)"
+                : label;
+
+    });
+
+    resolution.value = recommended;
+
+}
+
+// Graphics button selection
+
+graphicsButtons.forEach(button => {
+
+    button.addEventListener("click", function() {
+
+        selectedGraphics = this.dataset.quality;
+
+        graphicsButtons.forEach(btn => {
+            btn.classList.remove("active");
+        });
+
+        this.classList.add("active");
+
+        updateRecommendation();
+
+        status.textContent =
+            selectedGraphics.toUpperCase() +
+            " graphics selected.";
+
+    });
+
+});
+
+// Initial recommendation
+
+updateRecommendation();
+
+// Start game
+
+playButton.addEventListener("click", function() {
+
+    const settings = presets[selectedGraphics];
 
     const params = new URLSearchParams();
 
-    if (graphics === "low") {
-        params.set("low", "1");
-        params.set("fps", "30");
-        params.set("res", "1280x720");
-        params.set("shadows", "0");
-
-    } else if (graphics === "medium") {
-        params.set("fps", "30");
-        params.set("res", resolution);
-
-    } else if (graphics === "high") {
-        params.set("fps", "60");
-        params.set("res", resolution);
-    }
+    params.set("low", settings.low);
+    params.set("fps", settings.fps);
+    params.set("res", resolution.value);
+    params.set("shadows", settings.shadows);
 
     const game = new URL(GAME_URL);
+
     game.search = params.toString();
 
-    document.getElementById("status").textContent =
-        "Starting GTA 5...";
+    status.textContent = "Starting GTA 5...";
 
     window.location.href = game.toString();
 
