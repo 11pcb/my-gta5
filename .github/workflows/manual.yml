@@ -1,5 +1,5 @@
 
-name: GTA5 Manual Download
+name: GTA5 Manual Download and Build
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  download:
+  download-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -23,13 +23,13 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 3. Check initial disk space
+      # 3. Initial disk check
       - name: Check initial disk
         run: |
           echo "Initial disk space:"
           df -h /
 
-      # 4. Clean unused preinstalled tools
+      # 4. Clean unused runner tools
       - name: Clean runner disk
         run: |
           sudo apt-get clean
@@ -50,15 +50,42 @@ jobs:
 
       # 6. Verify downloaded files
       - name: Check downloaded files
-        if: always()
         run: |
-          echo "Final disk:"
-          df -h /
-
           echo "Mirror size:"
           du -sh mirror/ 2>/dev/null || true
 
           echo "Installed parts:"
+          ls -lh .installed-parts/ 2>/dev/null || true
+
+          echo "Available disk:"
+          df -h /
+
+      # 7. Build Cloudflare Pages output
+      - name: Build GTA5 Pages
+        run: |
+          python -u build_pages.py
+
+      # 8. Build report
+      - name: Check Pages output
+        if: always()
+        run: |
+          echo "Build output size:"
+          du -sh pages-output/ 2>/dev/null || true
+
+          echo "Total output files:"
+          find pages-output/ -type f 2>/dev/null | wc -l
+
+          echo "Output sample:"
+          find pages-output/ -maxdepth 2 -type f 2>/dev/null | head -30
+
+          echo "Final disk:"
+          df -h /
+
+      # 9. Report installed files
+      - name: Check installed parts
+        if: always()
+        run: |
+          echo "Installed receipts:"
           ls -lh .installed-parts/ 2>/dev/null || true
 
           echo "Download folder:"
