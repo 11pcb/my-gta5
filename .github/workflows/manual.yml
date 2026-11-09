@@ -87,7 +87,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx wrangler@latest pages deploy pages-output \
-            --project-name=my-gta5 \
+            --project-name=my-gta5-game \
             --branch=main
 
       # 10. Final report
