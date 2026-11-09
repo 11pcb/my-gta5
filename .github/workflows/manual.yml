@@ -80,17 +80,71 @@ jobs:
           echo "Available disk:"
           df -h /
 
-      # 9. Deploy to Cloudflare Pages
+      # 9. Validate Pages output
+      - name: Validate Pages output
+        run: |
+          set -e
+
+          test -d pages-output
+
+          FILE_COUNT=$(find pages-output -type f | wc -l)
+
+          echo "Total files: $FILE_COUNT"
+
+          if [ "$FILE_COUNT" -gt 20000 ]; then
+            echo "ERROR: Pages file count limit exceeded."
+            exit 1
+          fi
+
+          MAX_BYTES=$(find pages-output -type f -printf '%s\n' | sort -nr | head -1)
+
+          echo "Largest file: $MAX_BYTES bytes"
+
+          if [ "$MAX_BYTES" -gt 26214400 ]; then
+            echo "ERROR: A file exceeds 25 MiB."
+            exit 1
+          fi
+
+          echo "Validation successful."
+
+      # 10. Deploy to Cloudflare Pages with retry
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          npx wrangler@latest pages deploy pages-output \
-            --project-name=my-gta5 \
-            --branch=main
+          set -e
 
-      # 10. Final report
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ERROR: Cloudflare secrets are missing."
+            exit 1
+          fi
+
+          for attempt in 1 2 3; do
+            echo "=================================="
+            echo "Deployment attempt $attempt of 3"
+            echo "=================================="
+
+            if npx wrangler@latest pages deploy pages-output \
+              --project-name=my-gta5 \
+              --branch=main \
+              --commit-dirty=true; then
+
+              echo "Cloudflare deployment successful!"
+              exit 0
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              WAIT=$((attempt * 60))
+              echo "Deployment failed. Retrying in $WAIT seconds..."
+              sleep "$WAIT"
+            fi
+          done
+
+          echo "ERROR: All 3 deployment attempts failed."
+          exit 1
+
+      # 11. Final report
       - name: Check installed files
         if: always()
         run: |
