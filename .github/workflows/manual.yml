@@ -1,4 +1,4 @@
-name: GTA5 Manual Download and Upload to Hugging Face
+name: GTA5 Build and Deploy to HF Space
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  download-and-upload:
+  build-and-deploy-space:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -22,17 +22,10 @@ jobs:
         with:
           python-version: "3.11"
 
-      # 3. Initial disk check
-      - name: Check initial disk
-        run: |
-          echo "Initial disk space:"
-          df -h /
-
-      # 4. Clean unused runner tools
+      # 3. Clean unused runner tools to free disk space
       - name: Clean runner disk
         run: |
           sudo apt-get clean
-
           sudo rm -rf \
             /usr/local/lib/android \
             /usr/share/dotnet \
@@ -42,25 +35,18 @@ jobs:
           echo "Disk after cleanup:"
           df -h /
 
-      # 5. Download and extract game
+      # 4. Download and extract game
       - name: Download GTA5 files
         run: |
           python -u download_game.py
 
-      # 6. Verify downloaded files
-      - name: Check downloaded files
+      # 5. Build Pages output
+      - name: Build GTA5 Pages
         run: |
-          echo "Mirror size:"
-          du -sh mirror/ 2>/dev/null || true
+          python -u build_pages.py
 
-          echo "Installed parts:"
-          ls -lh .installed-parts/ 2>/dev/null || true
-
-          echo "Available disk:"
-          df -h /
-
-      # 7. Upload downloaded files to Hugging Face
-      - name: Upload to Hugging Face
+      # 6. Upload Build Output directly to Hugging Face Space
+      - name: Upload to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -79,30 +65,12 @@ jobs:
 
           api = HfApi()
 
-          # Game files 'mirror' folder mein download hoti hain, isliye wahi upload hoga
-          folder_to_upload = 'mirror'
-          if not os.path.exists(folder_to_upload):
-              folder_to_upload = '.'
-
-          print(f'Uploading folder: {folder_to_upload} to Hugging Face...')
+          print('Uploading build output to Hugging Face Space...')
           api.upload_folder(
-              folder_path=folder_to_upload,
-              repo_id='files-im009/my-gta5',
-              repo_type='dataset',
+              folder_path='pages-output',
+              repo_id='files-im009/pankajgta5',
+              repo_type='space',
               token=os.environ['HF_TOKEN']
           )
-          print('Successfully uploaded to Hugging Face Dataset!')
+          print('Successfully deployed to Hugging Face Space!')
           "
-
-      # 8. Final report
-      - name: Check installed files
-        if: always()
-        run: |
-          echo "Installed receipts:"
-          ls -lh .installed-parts/ 2>/dev/null || true
-
-          echo "Download folder:"
-          du -sh .downloads/ 2>/dev/null || true
-
-          echo "Final disk:"
-          df -h /
