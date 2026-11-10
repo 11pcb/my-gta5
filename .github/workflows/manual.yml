@@ -1,4 +1,4 @@
-name: GTA5 Manual Download, Build and Deploy
+name: GTA5 Manual Download and Upload to Hugging Face
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 jobs:
-  download-and-build:
+  download-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
@@ -59,102 +59,34 @@ jobs:
           echo "Available disk:"
           df -h /
 
-      # 7. Build Cloudflare Pages output
-      - name: Build GTA5 Pages
-        run: |
-          python -u build_pages.py
-
-      # 8. Build report
-      - name: Check Pages output
-        run: |
-          echo "Build output size:"
-          du -sh pages-output/ 2>/dev/null || true
-
-          echo "Total output files:"
-          find pages-output/ -type f | wc -l
-
-          echo "Output sample:"
-          find pages-output/ -maxdepth 2 -type f | head -30
-
-          echo "Available disk:"
-          df -h /
-
-      # 9. Validate Pages output
-      - name: Validate Pages output
-        run: |
-          set -e
-
-          test -d pages-output
-
-          FILE_COUNT=$(find pages-output -type f | wc -l)
-
-          echo "Total files: $FILE_COUNT"
-
-          if [ "$FILE_COUNT" -gt 20000 ]; then
-            echo "ERROR: Pages file count limit exceeded."
-            exit 1
-          fi
-
-          MAX_BYTES=$(find pages-output -type f -printf '%s\n' | sort -nr | head -1)
-
-          echo "Largest file: $MAX_BYTES bytes"
-
-          if [ "$MAX_BYTES" -gt 26214400 ]; then
-            echo "ERROR: A file exceeds 25 MiB."
-            exit 1
-          fi
-
-          echo "Validation successful."
-
-      # 10. Deploy to Cloudflare Pages with retry
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -e
-
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "ERROR: Cloudflare secrets are missing."
-            exit 1
-          fi
-
-          for attempt in 1 2 3; do
-            echo "=================================="
-            echo "Deployment attempt $attempt of 3"
-            echo "=================================="
-
-            if npx wrangler@latest pages deploy pages-output \
-              --project-name=my-gta5 \
-              --branch=main \
-              --commit-dirty=true; then
-
-              echo "Cloudflare deployment successful!"
-              break
-            fi
-
-            if [ "$attempt" -lt 3 ]; then
-              WAIT=$((attempt * 60))
-              echo "Deployment failed. Retrying in $WAIT seconds..."
-              sleep "$WAIT"
-            fi
-          done
-
-      # 11. Upload output to Hugging Face
-      - name: Upload output to Hugging Face
+      # 7. Upload downloaded files to Hugging Face
+      - name: Upload to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
+          set -e
+
+          if [ -z "$HF_TOKEN" ]; then
+            echo "ERROR: Hugging Face secret (HF_TOKEN) is missing."
+            exit 1
+          fi
+
           pip install --upgrade huggingface_hub
+
           python -c "
           import os
           from huggingface_hub import HfApi
 
           api = HfApi()
 
-          # Aapki build files/folders ko Hugging Face par push karne ke liye
+          # Game files 'mirror' folder mein download hoti hain, isliye wahi upload hoga
+          folder_to_upload = 'mirror'
+          if not os.path.exists(folder_to_upload):
+              folder_to_upload = '.'
+
+          print(f'Uploading folder: {folder_to_upload} to Hugging Face...')
           api.upload_folder(
-              folder_path='pages-output',
+              folder_path=folder_to_upload,
               repo_id='files-im009/my-gta5',
               repo_type='dataset',
               token=os.environ['HF_TOKEN']
@@ -162,7 +94,7 @@ jobs:
           print('Successfully uploaded to Hugging Face Dataset!')
           "
 
-      # 12. Final report
+      # 8. Final report
       - name: Check installed files
         if: always()
         run: |
