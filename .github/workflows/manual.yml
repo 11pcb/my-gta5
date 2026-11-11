@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      # 1. Free disk space
+      # 1. Clean runner disk
       - name: Clean runner disk
         run: |
           sudo apt-get clean
@@ -24,13 +24,13 @@ jobs:
             /usr/local/share/boost
           df -h /
 
-      # 2. Setup Git LFS (already available on runner)
+      # 2. Setup Git LFS
       - name: Setup Git LFS
         run: |
           git lfs version
           git lfs install
 
-      # 3. Download Hugging Face dataset
+      # 3. Download files from Hugging Face
       - name: Download from Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -42,23 +42,17 @@ jobs:
             exit 1
           fi
 
-          echo "Cloning dataset..."
-
           git clone \
             "https://oauth2:${HF_TOKEN}@huggingface.co/datasets/files-im009/cloudflare09" \
             pages-output
 
-          echo "Downloading actual LFS files..."
-
           git -C pages-output lfs pull
 
-          echo "Removing Git metadata..."
           rm -rf pages-output/.git
 
           FILE_COUNT=$(find pages-output -type f | wc -l)
 
           echo "Total files: $FILE_COUNT"
-          echo "Dataset size:"
           du -sh pages-output
 
           if [ "$FILE_COUNT" -eq 0 ]; then
@@ -66,9 +60,18 @@ jobs:
             exit 1
           fi
 
-          echo "Download verification completed."
+      # 4. Configure browser isolation headers
+      - name: Configure browser isolation headers
+        run: |
+          cat > pages-output/_headers <<'EOF'
+          /*
+            Cross-Origin-Opener-Policy: same-origin
+            Cross-Origin-Embedder-Policy: require-corp
+          EOF
 
-      # 4. Deploy to Cloudflare Pages
+          echo "Browser isolation headers configured."
+
+      # 5. Deploy to Cloudflare Pages
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -77,7 +80,7 @@ jobs:
           set -euo pipefail
 
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "ERROR: Cloudflare API token missing."
+            echo "ERROR: Cloudflare API Token missing."
             exit 1
           fi
 
@@ -91,7 +94,8 @@ jobs:
             --branch=main \
             --commit-dirty=true
 
-      # 5. Final disk check
+      # 6. Final disk check
       - name: Final disk check
         if: always()
-        run: df -h /
+        run: |
+          df -h /
