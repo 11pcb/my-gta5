@@ -13,49 +13,62 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Free disk space
+      # 1. Free disk space
+      - name: Clean runner disk
         run: |
           sudo apt-get clean
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/share/boost
           df -h /
 
-      - name: Install Git LFS
+      # 2. Setup Git LFS (already available on runner)
+      - name: Setup Git LFS
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git-lfs
+          git lfs version
           git lfs install
 
-      - name: Download Hugging Face dataset
+      # 3. Download Hugging Face dataset
+      - name: Download from Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -euo pipefail
 
-          test -n "$HF_TOKEN" || {
-            echo "HF_TOKEN secret missing"
+          if [ -z "$HF_TOKEN" ]; then
+            echo "ERROR: HF_TOKEN secret is missing."
             exit 1
-          }
+          fi
+
+          echo "Cloning dataset..."
 
           git clone \
-            --depth 1 \
-            https://huggingface.co/datasets/files-im009/cloudflare09 \
+            "https://oauth2:${HF_TOKEN}@huggingface.co/datasets/files-im009/cloudflare09" \
             pages-output
 
-          git -C pages-output remote set-url origin \
-            https://huggingface.co/datasets/files-im009/cloudflare09
+          echo "Downloading actual LFS files..."
 
-          git -C pages-output lfs pull \
-            --include="*" \
-            --exclude=""
+          git -C pages-output lfs pull
 
+          echo "Removing Git metadata..."
           rm -rf pages-output/.git
 
-          test "$(find pages-output -type f | wc -l)" -gt 0
+          FILE_COUNT=$(find pages-output -type f | wc -l)
 
-          echo "Download complete"
+          echo "Total files: $FILE_COUNT"
+          echo "Dataset size:"
           du -sh pages-output
-          df -h /
 
+          if [ "$FILE_COUNT" -eq 0 ]; then
+            echo "ERROR: No files downloaded."
+            exit 1
+          fi
+
+          echo "Download verification completed."
+
+      # 4. Deploy to Cloudflare Pages
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -63,14 +76,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          test -n "$CLOUDFLARE_API_TOKEN"
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "ERROR: Cloudflare API token missing."
+            exit 1
+          fi
+
+          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ERROR: Cloudflare Account ID missing."
+            exit 1
+          fi
 
           npx --yes wrangler@latest pages deploy pages-output \
             --project-name=updatedgta5 \
             --branch=main \
             --commit-dirty=true
 
+      # 5. Final disk check
       - name: Final disk check
         if: always()
         run: df -h /
