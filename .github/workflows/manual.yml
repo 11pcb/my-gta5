@@ -1,5 +1,4 @@
-
-name: GTA5 Manual Download, Build and Deploy
+name: GTA5 Manual Download, Build and Deploy to Hugging Face
 
 on:
   workflow_dispatch:
@@ -60,7 +59,7 @@ jobs:
           echo "Available disk:"
           df -h /
 
-      # 7. Build Cloudflare Pages output
+      # 7. Build Pages output
       - name: Build GTA5 Pages
         run: |
           python -u build_pages.py
@@ -81,47 +80,43 @@ jobs:
           echo "Final disk:"
           df -h /
 
-      # 9. Check Cloudflare upload limits
-      - name: Validate Pages output
+      # 9. Validate output folder exists
+      - name: Validate output folder
         run: |
           set -e
-
           test -d pages-output
+          echo "Output folder exists and ready for upload."
 
-          FILE_COUNT=$(find pages-output -type f | wc -l)
-          echo "Total files: $FILE_COUNT"
-
-          if [ "$FILE_COUNT" -gt 20000 ]; then
-            echo "ERROR: Cloudflare Pages file limit exceeded."
-            exit 1
-          fi
-
-          MAX_BYTES=$(find pages-output -type f -printf '%s\n' | sort -nr | head -1)
-          echo "Largest file: $MAX_BYTES bytes"
-
-          if [ "$MAX_BYTES" -gt 26214400 ]; then
-            echo "ERROR: A file exceeds Cloudflare's 25 MiB limit."
-            exit 1
-          fi
-
-          echo "Output validation successful."
-
-      # 10. Deploy to Cloudflare Pages
-      - name: Deploy to Cloudflare Pages
+      # 10. Upload to Hugging Face Dataset
+      - name: Deploy to Hugging Face
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -e
 
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "ERROR: Cloudflare GitHub Secrets are missing."
+          if [ -z "$HF_TOKEN" ]; then
+            echo "ERROR: HF_TOKEN secret is missing."
             exit 1
           fi
 
-          npx wrangler@latest pages deploy pages-output \
-            --project-name=my-gta5 \
-            --branch=main
+          pip install -U huggingface_hub
+
+          python -c "
+          from huggingface_hub import HfApi
+          api = HfApi()
+
+          repo_id = 'files-im009/cloudflare09'
+          repo_type = 'dataset'
+
+          print('Uploading pages-output to Hugging Face dataset: ' + repo_id)
+          api.upload_folder(
+              folder_path='pages-output',
+              repo_id=repo_id,
+              repo_type=repo_type,
+              token='${HF_TOKEN}'
+          )
+          print('Upload completed successfully!')
+          "
 
       # 11. Report installed files
       - name: Check installed parts
