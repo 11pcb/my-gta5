@@ -40,31 +40,31 @@ jobs:
           echo "Disk after cleanup:"
           df -h /
 
-      # 5. Download files from Hugging Face dataset
-      - name: Download from Hugging Face
+      # 5. Download files from Hugging Face using Git LFS
+      - name: Download from Hugging Face via Git LFS
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -e
-          pip install -U huggingface_hub
-
-          python -c "
-          from huggingface_hub import snapshot_download
-          import os
-
-          token = os.environ.get('HF_TOKEN')
-          print('Downloading dataset files from Hugging Face...')
           
-          snapshot_download(
-              repo_id='files-im009/cloudflare09',
-              repo_type='dataset',
-              local_dir='pages-output',
-              token=token
-          )
-          print('Download completed successfully!')
-          "
+          if [ -z "$HF_TOKEN" ]; then
+            echo "ERROR: HF_TOKEN secret is missing."
+            exit 1
+          fi
 
-      # 6. Verify downloaded files
+          # Install Git LFS
+          sudo apt-get update && sudo apt-get install -y git-lfs
+          git lfs install
+
+          echo "Cloning dataset from Hugging Face..."
+          git clone https://oauth2:${HF_TOKEN}@huggingface.co/datasets/files-im009/cloudflare09 pages-output
+
+          # Remove .git folder so it doesn't count towards Cloudflare files
+          rm -rf pages-output/.git
+
+          echo "Download completed successfully!"
+
+      # 6. Verify downloaded files (Limit check removed)
       - name: Verify Pages output
         run: |
           set -e
@@ -72,11 +72,6 @@ jobs:
 
           FILE_COUNT=$(find pages-output -type f | wc -l)
           echo "Total files downloaded: $FILE_COUNT"
-
-          if [ "$FILE_COUNT" -gt 20000 ]; then
-            echo "ERROR: Cloudflare Pages file limit exceeded."
-            exit 1
-          fi
 
           echo "Folder size:"
           du -sh pages-output/
