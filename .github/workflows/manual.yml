@@ -1,5 +1,4 @@
-
-name: HF to Cloudflare Pages Manual Deploy
+name: GTA5 Manual Download, Build and Deploy to Hugging Face
 
 on:
   workflow_dispatch:
@@ -8,94 +7,126 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  download-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      # 1. Clean runner disk
+      # 1. Get repository
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # 3. Initial disk check
+      - name: Check initial disk
+        run: |
+          echo "Initial disk space:"
+          df -h /
+
+      # 4. Clean unused runner tools
       - name: Clean runner disk
         run: |
           sudo apt-get clean
+
           sudo rm -rf \
             /usr/local/lib/android \
             /usr/share/dotnet \
             /opt/ghc \
             /usr/local/share/boost
+
+          echo "Disk after cleanup:"
           df -h /
 
-      # 2. Setup Git LFS
-      - name: Setup Git LFS
+      # 5. Download and extract game
+      - name: Download GTA5 files
         run: |
-          git lfs version
-          git lfs install
+          python -u download_game.py
 
-      # 3. Download files from Hugging Face
-      - name: Download from Hugging Face
+      # 6. Verify downloaded files
+      - name: Check downloaded files
+        run: |
+          echo "Mirror size:"
+          du -sh mirror/ 2>/dev/null || true
+
+          echo "Installed parts:"
+          ls -lh .installed-parts/ 2>/dev/null || true
+
+          echo "Available disk:"
+          df -h /
+
+      # 7. Build Pages output
+      - name: Build GTA5 Pages
+        run: |
+          python -u build_pages.py
+
+      # 8. Build report
+      - name: Check Pages output
+        if: always()
+        run: |
+          echo "Build output size:"
+          du -sh pages-output/ 2>/dev/null || true
+
+          echo "Total output files:"
+          find pages-output/ -type f 2>/dev/null | wc -l
+
+          echo "Output sample:"
+          find pages-output/ -maxdepth 2 -type f 2>/dev/null | head -30
+
+          echo "Final disk:"
+          df -h /
+
+      # 9. Validate output folder exists
+      - name: Validate output folder
+        run: |
+          set -e
+          test -d pages-output
+          echo "Output folder exists and ready for upload."
+
+      # 10. Upload to Hugging Face Dataset
+      - name: Deploy to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -euo pipefail
+          set -e
 
           if [ -z "$HF_TOKEN" ]; then
             echo "ERROR: HF_TOKEN secret is missing."
             exit 1
           fi
 
-          git clone \
-            "https://oauth2:${HF_TOKEN}@huggingface.co/datasets/files-im009/cloudflare09" \
-            pages-output
+          pip install -U huggingface_hub
 
-          git -C pages-output lfs pull
+          python -c "
+          from huggingface_hub import HfApi
+          api = HfApi()
 
-          rm -rf pages-output/.git
+          repo_id = 'files-im009/cloudflare09'
+          repo_type = 'dataset'
 
-          FILE_COUNT=$(find pages-output -type f | wc -l)
+          print('Uploading pages-output to Hugging Face dataset: ' + repo_id)
+          api.upload_folder(
+              folder_path='pages-output',
+              repo_id=repo_id,
+              repo_type=repo_type,
+              token='${HF_TOKEN}'
+          )
+          print('Upload completed successfully!')
+          "
 
-          echo "Total files: $FILE_COUNT"
-          du -sh pages-output
-
-          if [ "$FILE_COUNT" -eq 0 ]; then
-            echo "ERROR: No files downloaded."
-            exit 1
-          fi
-
-      # 4. Configure browser isolation headers
-      - name: Configure browser isolation headers
-        run: |
-          cat > pages-output/_headers <<'EOF'
-          /*
-            Cross-Origin-Opener-Policy: same-origin
-            Cross-Origin-Embedder-Policy: require-corp
-          EOF
-
-          echo "Browser isolation headers configured."
-
-      # 5. Deploy to Cloudflare Pages
-      - name: Deploy to Cloudflare Pages
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "ERROR: Cloudflare API Token missing."
-            exit 1
-          fi
-
-          if [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "ERROR: Cloudflare Account ID missing."
-            exit 1
-          fi
-
-          npx --yes wrangler@latest pages deploy pages-output \
-            --project-name=updatedgta5 \
-            --branch=main \
-            --commit-dirty=true
-
-      # 6. Final disk check
-      - name: Final disk check
+      # 11. Report installed files
+      - name: Check installed parts
         if: always()
         run: |
+          echo "Installed receipts:"
+          ls -lh .installed-parts/ 2>/dev/null || true
+
+          echo "Download folder:"
+          du -sh .downloads/ 2>/dev/null || true
+
+          echo "Final disk:"
           df -h /
