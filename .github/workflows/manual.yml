@@ -1,4 +1,5 @@
-name: Download from HF and Deploy to Cloudflare Pages
+
+name: HF to Cloudflare Pages Manual Deploy
 
 on:
   workflow_dispatch:
@@ -7,95 +8,69 @@ permissions:
   contents: read
 
 jobs:
-  deploy-to-cloudflare:
+  deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      # 1. Get repository
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      # 2. Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      # 3. Initial disk check
-      - name: Check initial disk
-        run: |
-          echo "Initial disk space:"
-          df -h /
-
-      # 4. Clean unused runner tools to free up space
-      - name: Clean runner disk
+      - name: Free disk space
         run: |
           sudo apt-get clean
-          sudo rm -rf \
-            /usr/local/lib/android \
-            /usr/share/dotnet \
-            /opt/ghc \
-            /usr/local/share/boost
-          echo "Disk after cleanup:"
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost
           df -h /
 
-      # 5. Download files from Hugging Face using Git LFS
-      - name: Download from Hugging Face via Git LFS
+      - name: Install Git LFS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git-lfs
+          git lfs install
+
+      - name: Download Hugging Face dataset
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          set -e
-          
-          if [ -z "$HF_TOKEN" ]; then
-            echo "ERROR: HF_TOKEN secret is missing."
+          set -euo pipefail
+
+          test -n "$HF_TOKEN" || {
+            echo "HF_TOKEN secret missing"
             exit 1
-          fi
+          }
 
-          # Install Git LFS
-          sudo apt-get update && sudo apt-get install -y git-lfs
-          git lfs install
+          git clone \
+            --depth 1 \
+            https://huggingface.co/datasets/files-im009/cloudflare09 \
+            pages-output
 
-          echo "Cloning dataset from Hugging Face..."
-          git clone https://oauth2:${HF_TOKEN}@huggingface.co/datasets/files-im009/cloudflare09 pages-output
+          git -C pages-output remote set-url origin \
+            https://huggingface.co/datasets/files-im009/cloudflare09
 
-          # Remove .git folder so it doesn't count towards Cloudflare files
+          git -C pages-output lfs pull \
+            --include="*" \
+            --exclude=""
+
           rm -rf pages-output/.git
 
-          echo "Download completed successfully!"
+          test "$(find pages-output -type f | wc -l)" -gt 0
 
-      # 6. Verify downloaded files (Limit check removed)
-      - name: Verify Pages output
-        run: |
-          set -e
-          test -d pages-output
+          echo "Download complete"
+          du -sh pages-output
+          df -h /
 
-          FILE_COUNT=$(find pages-output -type f | wc -l)
-          echo "Total files downloaded: $FILE_COUNT"
-
-          echo "Folder size:"
-          du -sh pages-output/
-          echo "Verification successful."
-
-      # 7. Deploy to Cloudflare Pages
       - name: Deploy to Cloudflare Pages
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
-            echo "ERROR: Cloudflare GitHub Secrets are missing."
-            exit 1
-          fi
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
 
-          npx wrangler@latest pages deploy pages-output \
+          npx --yes wrangler@latest pages deploy pages-output \
             --project-name=updatedgta5 \
-            --branch=main
+            --branch=main \
+            --commit-dirty=true
 
-      # 8. Final Disk Check
       - name: Final disk check
         if: always()
-        run: |
-          df -h /
+        run: df -h /
